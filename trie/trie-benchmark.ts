@@ -482,7 +482,7 @@ console.log('\n📊 Memory Characteristics');
 console.log('-'.repeat(80));
 
 const trie7 = new Trie<[string, number], string>();
-const trie7_weak = new Trie<[string, object], string>();
+const trie7_weak = new Trie<[string, symbol], string>();
 const nested7 = new NestedMap<string>();
 
 console.time('Trie - memory test');
@@ -494,7 +494,7 @@ console.timeEnd('Trie - memory test');
 
 console.time('Trie - memory test WeakKey');
 for (let i = 0; i < pathCount; i++) {
-  trie7_weak.set(['prefix', {}], `value${i}`);
+  trie7_weak.set(['prefix', Symbol('WEAK')], `value${i}`);
 }
 console.timeEnd('Trie - memory test WeakKey');
 
