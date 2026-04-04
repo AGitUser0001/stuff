@@ -496,6 +496,10 @@ console.time('Trie - memory test WeakKey');
 for (let i = 0; i < pathCount; i++) {
   trie7_weak.set(['prefix', Symbol('WEAK')], `value${i}`);
 }
+
+declare const gc: (() => void) | undefined;
+if (typeof gc !== 'undefined') gc();
+
 console.timeEnd('Trie - memory test WeakKey');
 
 console.time('NestedMap - memory test');
