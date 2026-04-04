@@ -189,17 +189,17 @@ benchmark('Trie - direct sets (no partial)', () => {
 console.log('\n📊 Benchmark 3.5: Long-lived Partial (correct usage)');
 console.log('-'.repeat(80));
 
-const trie = new Trie<readonly [string, number, string, number], any>();
-using userTree = trie.partial(['user', 123]);
+const trie3_5 = new Trie<readonly [string, number, string, number], any>();
+using userTree = trie3_5.partial(['user', 123]);
 
 benchmark('Trie - reused partial (50000 sets)', () => {
   userTree.set(['data', Math.random()], Math.random());
 }, 50000);
 
 // vs
-
+const trie3_5_5 = new Trie<readonly [string, number, string, number], any>();
 benchmark('Trie - direct path (50000 sets)', () => {
-  trie.set(['user', 123, 'data', Math.random()], Math.random());
+  trie3_5_5.set(['user', 123, 'data', Math.random()], Math.random());
 }, 50000);
 
 // Benchmark 4: Deep paths
