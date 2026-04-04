@@ -92,7 +92,7 @@ class FlatMap<T> {
 
 function benchmark(name: string, fn: () => void, iterations: number = 100000): number {
   // Warmup
-  for (let i = 0; i < Math.min(1000, iterations / 10); i++) fn();
+  for (let i = 0; i < Math.min(5000, iterations / 10); i++) fn();
 
   const start = performance.now();
   for (let i = 0; i < iterations; i++) {
