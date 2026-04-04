@@ -482,15 +482,41 @@ console.log('\n📊 Memory Characteristics');
 console.log('-'.repeat(80));
 
 const trie7 = new Trie<[string, number], string>();
+const trie7_weak = new Trie<[string, object], string>();
 const nested7 = new NestedMap<string>();
 
-const pathCount = 10000;
+console.time('Trie - memory test');
+const pathCount = 2500000;
 for (let i = 0; i < pathCount; i++) {
   trie7.set(['prefix', i], `value${i}`);
+}
+console.timeEnd('Trie - memory test');
+
+console.time('Trie - memory test WeakKey');
+for (let i = 0; i < pathCount; i++) {
+  trie7_weak.set(['prefix', {}], `value${i}`);
+}
+console.timeEnd('Trie - memory test WeakKey');
+
+console.time('NestedMap - memory test');
+for (let i = 0; i < pathCount; i++) {
   nested7.set(['prefix', i], `value${i}`);
 }
+console.timeEnd('NestedMap - memory test');
 
 console.log(`Created ${pathCount} paths with shared prefix 'prefix'`);
+console.log(`Remaining count in Trie: ${trie7.size}`);
+console.log(`Remaining count in Trie_weak: ${trie7_weak.size}`);
+
+console.time('NestedMap - Has test');
+let count = 0;
+for (let i = 0; i < pathCount; i++) {
+  count += +nested7.has(['prefix', i]);
+}
+console.timeEnd('NestedMap - Has test');
+
+console.log(`Remaining count in NestedMap: ${count}`);
+
 console.log('Trie: Shares parent node across all paths + auto-cleanup on delete');
 console.log('NestedMap: Shares parent node across all paths (manual cleanup needed)');
 console.log('FlatMap: Each path is independent (higher memory, simpler cleanup)');
