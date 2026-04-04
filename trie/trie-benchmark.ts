@@ -242,7 +242,7 @@ benchmark('FlatMap - deep path get', () => {
 console.log('\n📊 Benchmark 5: Weak Key Operations');
 console.log('-'.repeat(80));
 
-const trie5 = new Trie<[object, string], number>();
+const trie5 = new Trie<[object, string], number>(true);
 const weakMap5 = new WeakMap<object, Map<string, number>>();
 
 const objects = Array.from({ length: 1000 }, () => ({}));
@@ -482,7 +482,7 @@ console.log('\n📊 Memory Characteristics');
 console.log('-'.repeat(80));
 
 const trie7 = new Trie<[string, number], string>();
-const trie7_weak = new Trie<[string, symbol], string>();
+const trie7_weak = new Trie<[string, symbol], string>(true);
 const nested7 = new NestedMap<string>();
 
 console.time('Trie - memory test');

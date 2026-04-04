@@ -148,12 +148,15 @@ export class Trie<K extends ArrayType, T> implements Map<K, T> {
       derefed.#erase();
     });
 
-  #weakStore: WeakMap<WeakKey, Trie<ArrayType, T>> = new WeakMap();
+  #weakStore: WeakMap<WeakKey, Trie<ArrayType, T>> | null = null;
   #strongStore: Map<unknown, Trie<ArrayType, T>> = new Map();
-  #usesWeakMap: boolean;
+  #Weak: boolean;
 
-  constructor(useWeakMap = true) {
-    this.#usesWeakMap = !!useWeakMap;
+  constructor(Weak = false) {
+    this.#Weak = !!Weak;
+    if (this.#Weak) {
+      this.#weakStore = new WeakMap();
+    }
   }
 
   static from<K extends ArrayType, T>(
@@ -187,7 +190,7 @@ export class Trie<K extends ArrayType, T> implements Map<K, T> {
   }
 
   #isWeak(key: unknown): key is WeakKey {
-    if (!this.#usesWeakMap) return false;
+    if (!this.#Weak) return false;
     if (key === null) return false;
     if (typeof key === 'object' || typeof key === 'function') return true;
     if (typeof key === 'symbol' && Symbol.keyFor(key) === undefined) return true;
@@ -231,7 +234,7 @@ export class Trie<K extends ArrayType, T> implements Map<K, T> {
   }
 
   #create<K extends ArrayType>(parent: Trie<ArrayType, T> | null) {
-    const subTrie = new Trie<K, T>(this.#usesWeakMap);
+    const subTrie = new Trie<K, T>(this.#Weak);
     subTrie.#count = 0;
     subTrie.#parent = parent;
     return subTrie;
@@ -241,7 +244,7 @@ export class Trie<K extends ArrayType, T> implements Map<K, T> {
     let current: Trie<ArrayType, T> = this;
     for (const key of path) {
       if (current.#isWeak(key)) {
-        const store = current.#weakStore;
+        const store = current.#weakStore!;
         let value = store.get(key);
         if (!value) {
           const token = Symbol('Unregister Token');
@@ -272,7 +275,7 @@ export class Trie<K extends ArrayType, T> implements Map<K, T> {
     let current: Trie<ArrayType, T> | undefined = this;
     for (const key of path) {
       if (current.#isWeak(key)) {
-        current = current.#weakStore.get(key);
+        current = current.#weakStore!.get(key);
       } else {
         current = current.#strongStore.get(key);
       }
@@ -293,7 +296,7 @@ export class Trie<K extends ArrayType, T> implements Map<K, T> {
       [current.#parent, current] = [null, current.#parent];
 
       if (child.#parentWeakKey) {
-        current.#weakStore.delete(child.#parentWeakKey);
+        current.#weakStore!.delete(child.#parentWeakKey);
         Trie.#registry.unregister(child.#unregisterToken!);
         current.#count &&= current.#count - 1;
         child.#parentWeakKey = null;
@@ -358,7 +361,7 @@ export class Trie<K extends ArrayType, T> implements Map<K, T> {
       const token = Symbol('Unregister Token');
       Trie.#registry.register(weakKey, new WeakRef(parent), token);
 
-      parent.#weakStore.set(weakKey, subTrie);
+      parent.#weakStore!.set(weakKey, subTrie);
       subTrie.#parent = parent;
       subTrie.#parentWeakKey = weakKey;
       subTrie.#unregisterToken = token;
