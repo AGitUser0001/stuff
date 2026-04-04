@@ -56,11 +56,11 @@ type RemovePrefixInternal<
   P extends MutableArrayType
 > =
   T extends MutableArrayType ?
-  // Base case
+  // Exit case
   P extends []
   ? T
 
-  // Step case (tuple-to-tuple)
+  // Tuple-to-tuple
   : [...T, unknown] extends [infer THead, ...ArrayType, unknown]
   ? ([...P, unknown] extends [infer PHead, ...ArrayType, unknown]
     ? [PHead] extends [THead]
@@ -69,9 +69,9 @@ type RemovePrefixInternal<
       ShiftLeft<P>
     >
     : never
-    : never // We don't have handling logic for T having rest but P not having rest, so we just fail in that case
+    : never // We don't have handling logic for P having rest but T not having rest, so we just fail in that case
   )
-  // Rest handling fallback
+  // Rest handling
   : HandleRest<T, P> extends [infer NewT extends MutableArrayType, infer NewP extends MutableArrayType]
   ? RemovePrefixInternal<NewT, NewP> : never
   : never;
