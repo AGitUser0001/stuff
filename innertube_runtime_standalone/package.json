@@ -1,0 +1,17 @@
+{
+  "name": "yt-stream-modbot-innertube-worker",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22.15.0" },
+  "scripts": {
+    "typecheck": "node --check worker.mjs && tsc -p jsconfig.json"
+  },
+  "dependencies": {
+    "cordis": "4.0.0-rc.10",
+    "youtubei.js": "^18.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.2.0",
+    "typescript": "^5.9.3"
+  }
+}
