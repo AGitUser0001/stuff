@@ -10,6 +10,7 @@ import { CordisBridge, lineTransport } from "./cordis_bridge.mjs";
 import { httpStatus, isTransientNetworkError } from "./network_errors.mjs";
 import { ChatItems, responseActions } from "./chat_items.mjs";
 import { deletionTimestamp } from "./chat_deletions.mjs";
+import { studioFetchInit, updateCreatorChannel } from "./creator_channel.mjs";
 
 /** @typedef {import("youtubei.js").Innertube} YouTubeClient */
 /** @typedef {Record<string, any>} DynamicObject */
@@ -414,7 +415,7 @@ Parser.addRuntimeParser(
  * @param {any} init
  */
 async function youtubeFetch(input, init) {
-  const response = await fetch(input, init);
+  const response = await fetch(input, studioFetchInit(input, init, cookie));
   await updateCookiesFromResponse(response);
   return response;
 }
@@ -2205,6 +2206,8 @@ async function sendChatMessage(videoId, text) {
  */
 async function dispatch(method, params) {
   switch (method) {
+    case "update_creator_channel":
+      return authenticated(async () => updateCreatorChannel(await getYouTube(), params), true);
     case "resolve_user": {
       const target = String(params.target || "");
       if (!(target.startsWith("@") || /^UC[\w-]{22}$/.test(target))) {

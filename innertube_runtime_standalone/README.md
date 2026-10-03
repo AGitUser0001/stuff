@@ -93,5 +93,36 @@ All calls use the same `innertube.request(method, params)` envelope shown above:
 | `inspect_user_visibility` | `video_id`, `author_channel_id`; optional `message_id` | Check whether a user is hidden |
 | `timeout`, `hide`, `unhide` | `video_id`, `author_channel_id`; timeout also needs `seconds` | Moderate a user |
 | `login` | none | Open the dedicated Chrome login; also available as `node worker.mjs --login` |
+| `update_creator_channel` | Studio request body including owner `channelId`; settings request objects, optional `context` and `channelReadMask` | Update creator channel settings through YouTube Studio |
 
 These are YouTube operations, not local simulations. The wire contract is implemented in `dispatch()` in `worker.mjs` and `CordisBridge` in `cordis_bridge.mjs`.
+
+## General Studio channel settings
+
+`await chat.update_creator_channel(body)` (or
+`await chat.request("update_creator_channel", body)`) posts the supplied settings
+to Studio's `creator/update_creator_channel` endpoint. `channelId` is the owner
+channel being updated. Settings request objects and the optional `channelReadMask`
+pass through without interpretation. The worker supplies Studio client ID 62,
+using YouTube.js's `WEB_CREATOR` version by default; `context.client.clientVersion`
+can override it. Other context fields can be supplied per request. Account index
+and channel delegation remain those of the selected authenticated session.
+
+For example, to remove **all IDs in a known, complete hidden-user list**, supply
+that list in `commentsSettingsRequest.removedHiddenUsers`:
+
+```python
+async with InnerTube() as chat:
+    await chat.update_creator_channel({
+        "channelId": "OWNER_CHANNEL_ID",
+        "commentsSettingsRequest": {
+            "removedHiddenUsers": ["KNOWN_HIDDEN_CHANNEL_ID_1", "KNOWN_HIDDEN_CHANNEL_ID_2"],
+        },
+    })
+```
+
+Replace the placeholders with your owner channel and every known hidden-user ID
+you intend to remove. This API does not enumerate hidden users. An empty array
+does not mean “clear everyone”; only explicitly supplied IDs are requested for
+removal. This is a real settings update and requires owner-authorized Studio
+access; being a live-chat moderator alone does not grant it.
