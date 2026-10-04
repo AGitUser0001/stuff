@@ -93,36 +93,81 @@ All calls use the same `innertube.request(method, params)` envelope shown above:
 | `inspect_user_visibility` | `video_id`, `author_channel_id`; optional `message_id` | Check whether a user is hidden |
 | `timeout`, `hide`, `unhide` | `video_id`, `author_channel_id`; timeout also needs `seconds` | Moderate a user |
 | `login` | none | Open the dedicated Chrome login; also available as `node worker.mjs --login` |
-| `update_creator_channel` | Studio request body including owner `channelId`; settings request objects, optional `context` and `channelReadMask` | Update creator channel settings through YouTube Studio |
 
 These are YouTube operations, not local simulations. The wire contract is implemented in `dispatch()` in `worker.mjs` and `CordisBridge` in `cordis_bridge.mjs`.
 
-## General Studio channel settings
+## Unhide users after future live-chat hide events
 
-`await chat.update_creator_channel(body)` (or
-`await chat.request("update_creator_channel", body)`) posts the supplied settings
-to Studio's `creator/update_creator_channel` endpoint. `channelId` is the owner
-channel being updated. Settings request objects and the optional `channelReadMask`
-pass through without interpretation. The worker supplies Studio client ID 62,
-using YouTube.js's `WEB_CREATOR` version by default; `context.client.clientVersion`
-can override it. Other context fields can be supplied per request. Account index
-and channel delegation remain those of the selected authenticated session.
+This example watches future author-wide moderation actions and immediately
+unhides the affected user if YouTube confirms that they are hidden. It does not
+list or unhide historical hidden users. Sign in as the stream owner or an account
+with the required moderation permission before running it; `unhide` is a real
+channel-wide moderation operation.
 
-For example, to remove **all IDs in a known, complete hidden-user list**, supply
-that list in `commentsSettingsRequest.removedHiddenUsers`:
+The text-only `moderation` event has no affected-user channel ID. Enable the
+existing `trace_action` event instead. The installed parsers expose
+`MarkChatItemsByAuthorAsDeletedAction` and `RemoveChatItemByAuthorAction` with
+`external_channel_id`, the affected user. A moderator's linked channel ID in
+`deleted_state_message` identifies the actor and must not be used as the target.
+These author-wide actions can also accompany timeouts, so check the existing
+`inspect_user_visibility` API before requesting `unhide`; do not infer a hide
+from localized text such as “this user was hidden by…”.
 
 ```python
-async with InnerTube() as chat:
-    await chat.update_creator_channel({
-        "channelId": "OWNER_CHANNEL_ID",
-        "commentsSettingsRequest": {
-            "removedHiddenUsers": ["KNOWN_HIDDEN_CHANNEL_ID_1", "KNOWN_HIDDEN_CHANNEL_ID_2"],
-        },
-    })
+import asyncio
+import os
+import re
+from bridge import InnerTube, InnerTubeError
+
+async def unhide_future_hides(chat, video_id):
+    pending = asyncio.Queue()
+
+    def receive(event):
+        if (not isinstance(event, dict) or event.get("event") != "trace_action"
+                or event.get("video_id") != video_id
+                or event.get("historical") is not False):
+            return
+        action = event.get("action")
+        if not isinstance(action, dict) or action.get("type") not in {
+            "MarkChatItemsByAuthorAsDeletedAction", "RemoveChatItemByAuthorAction",
+        }:
+            return
+        affected = action.get("external_channel_id")
+        if isinstance(affected, str) and re.fullmatch(r"UC[\w-]{22}", affected, re.ASCII):
+            pending.put_nowait(affected)
+
+    remove_listener = chat.on_event(receive)
+    try:
+        await chat.subscribe(video_id)
+        while True:
+            affected = await pending.get()
+            visibility = await chat.request("inspect_user_visibility", {
+                "video_id": video_id, "author_channel_id": affected,
+            })
+            if visibility.get("hidden") is not True:
+                continue
+            try:
+                await chat.request("unhide", {
+                    "video_id": video_id, "author_channel_id": affected,
+                })
+            except InnerTubeError as error:
+                # Another moderator may have unhidden the user in the meantime.
+                if error.code != "NOT_HIDDEN":
+                    raise
+    finally:
+        remove_listener()
+
+async def main():
+    os.environ["YT_STREAM_MODBOT_TRACE_EVENTS"] = "1"  # Set before worker startup.
+    async with InnerTube() as chat:
+        await unhide_future_hides(chat, "VIDEO_ID")
+
+asyncio.run(main())
 ```
 
-Replace the placeholders with your owner channel and every known hidden-user ID
-you intend to remove. This API does not enumerate hidden users. An empty array
-does not mean “clear everyone”; only explicitly supplied IDs are requested for
-removal. This is a real settings update and requires owner-authorized Studio
-access; being a live-chat moderator alone does not grant it.
+Initial snapshot actions (`historical: true`) are skipped. Requests are processed
+in event order, and repeated actions are checked against current visibility.
+Single-message deletions, held-message rejection, and text-only notices are
+ignored. A lost subscription or an unavailable visibility/unhide action can
+prevent handling an event; this is an event-driven example, not a historical
+reconciliation job. Stop it with Ctrl+C.

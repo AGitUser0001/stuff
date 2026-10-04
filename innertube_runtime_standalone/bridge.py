@@ -95,10 +95,6 @@ class InnerTube:
         """Open the dedicated Chrome window and save the selected account locally."""
         return await self.request("login", {})
 
-    async def update_creator_channel(self, body: dict[str, Any]) -> dict[str, Any]:
-        """Send a general Studio channel settings body, including owner channelId."""
-        return await self.request("update_creator_channel", body)
-
     async def send_message(self, video_id: str, text: str) -> str:
         await self.subscribe(video_id)
         result = await self.request("send_message", {"video_id": video_id, "text": text})
