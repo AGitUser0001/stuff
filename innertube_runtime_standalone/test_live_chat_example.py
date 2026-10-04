@@ -83,6 +83,7 @@ class LiveChatExampleTests(unittest.IsolatedAsyncioTestCase):
             task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await task
+        self.assertTrue(task.cancelled())
         self.assertTrue(chat.disposed)
 
     async def test_author_wide_actions_target_affected_user_not_moderator(self):
@@ -118,15 +119,52 @@ class LiveChatExampleTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_unhide_race_is_tolerated(self):
         chat = FakeChat([action_event()], unhide_error=InnerTubeError("NOT_HIDDEN", "already visible"))
-        await self.run_example(chat)
+        with self.assertLogs("auto_unhide", level="ERROR") as logs:
+            await self.run_example(chat)
+        self.assertIn("NOT_HIDDEN", "\n".join(logs.output))
         self.assertEqual(len(chat.calls), 2)
 
-    async def test_other_failures_are_reported_and_listener_removed(self):
-        chat = FakeChat([action_event()], unhide_error=InnerTubeError("ACTION_NOT_AVAILABLE", "no action"))
-        with self.assertRaises(InnerTubeError) as raised:
+    async def test_failed_lookup_or_unhide_is_logged_then_later_user_is_unhidden(self):
+        next_target = "UC" + "c" * 22
+        for failing_method in ("inspect_user_visibility", "unhide"):
+            with self.subTest(failing_method=failing_method):
+                class RecoveringChat(FakeChat):
+                    async def request(self, method, params):
+                        if params["author_channel_id"] == TARGET and method == failing_method:
+                            self.calls.append((method, params))
+                            raise InnerTubeError("ACTION_NOT_AVAILABLE", "no action")
+                        return await super().request(method, params)
+
+                chat = RecoveringChat([
+                    action_event(),
+                    action_event(action={
+                        "type": "RemoveChatItemByAuthorAction", "external_channel_id": next_target,
+                    }),
+                ])
+                with self.assertLogs("auto_unhide", level="ERROR") as logs:
+                    await self.run_example(chat)
+                self.assertEqual(len(logs.records), 1)
+                self.assertIn(TARGET, logs.output[0])
+                self.assertIn("ACTION_NOT_AVAILABLE", logs.output[0])
+                failed_target = {"video_id": "video", "author_channel_id": TARGET}
+                successful_target = {"video_id": "video", "author_channel_id": next_target}
+                expected = [("inspect_user_visibility", failed_target)]
+                if failing_method == "unhide":
+                    expected.append(("unhide", failed_target))
+                expected.extend([
+                    ("inspect_user_visibility", successful_target), ("unhide", successful_target),
+                ])
+                self.assertEqual(chat.calls, expected)
+
+    async def test_cancellation_during_lookup_propagates_without_logging(self):
+        class BlockingChat(FakeChat):
+            async def request(self, method, params):
+                self.handled.set()
+                await asyncio.Future()
+
+        chat = BlockingChat([action_event()])
+        with self.assertNoLogs("auto_unhide", level="ERROR"):
             await self.run_example(chat)
-        self.assertEqual(raised.exception.code, "ACTION_NOT_AVAILABLE")
-        self.assertTrue(chat.disposed)
 
 
 if __name__ == "__main__":

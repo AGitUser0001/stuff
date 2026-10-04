@@ -115,9 +115,12 @@ from localized text such as “this user was hidden by…”.
 
 ```python
 import asyncio
+import logging
 import os
 import re
-from bridge import InnerTube, InnerTubeError
+from bridge import InnerTube
+
+logger = logging.getLogger("auto_unhide")
 
 async def unhide_future_hides(chat, video_id):
     pending = asyncio.Queue()
@@ -141,23 +144,23 @@ async def unhide_future_hides(chat, video_id):
         await chat.subscribe(video_id)
         while True:
             affected = await pending.get()
-            visibility = await chat.request("inspect_user_visibility", {
-                "video_id": video_id, "author_channel_id": affected,
-            })
-            if visibility.get("hidden") is not True:
-                continue
             try:
+                visibility = await chat.request("inspect_user_visibility", {
+                    "video_id": video_id, "author_channel_id": affected,
+                })
+                if visibility.get("hidden") is not True:
+                    continue
                 await chat.request("unhide", {
                     "video_id": video_id, "author_channel_id": affected,
                 })
-            except InnerTubeError as error:
-                # Another moderator may have unhidden the user in the meantime.
-                if error.code != "NOT_HIDDEN":
-                    raise
+            except Exception:
+                logger.exception("Could not process hide event for %s", affected)
+                # Continue with later events; asyncio cancellation still propagates.
     finally:
         remove_listener()
 
 async def main():
+    logging.basicConfig(level=logging.INFO)
     os.environ["YT_STREAM_MODBOT_TRACE_EVENTS"] = "1"  # Set before worker startup.
     async with InnerTube() as chat:
         await unhide_future_hides(chat, "VIDEO_ID")
@@ -169,5 +172,6 @@ Initial snapshot actions (`historical: true`) are skipped. Requests are processe
 in event order, and repeated actions are checked against current visibility.
 Single-message deletions, held-message rejection, and text-only notices are
 ignored. A lost subscription or an unavailable visibility/unhide action can
-prevent handling an event; this is an event-driven example, not a historical
-reconciliation job. Stop it with Ctrl+C.
+prevent handling an event. Lookup and unhide failures are logged, and the watcher
+continues with later events without retrying the failed event. This is an
+event-driven example, not a historical reconciliation job. Stop it with Ctrl+C.
